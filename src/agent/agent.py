@@ -3,6 +3,7 @@ import re
 from typing import List, Dict, Any, Optional
 from src.core.llm_provider import LLMProvider
 from src.telemetry.logger import logger
+from src.tools import execute_tool
 
 class ReActAgent:
     """
@@ -67,8 +68,31 @@ class ReActAgent:
         """
         Helper method to execute tools by name.
         """
-        for tool in self.tools:
-            if tool['name'] == tool_name:
-                # TODO: Implement dynamic function calling or simple if/else
-                return f"Result of {tool_name}"
-        return f"Tool {tool_name} not found."
+        try:
+            # Parse arguments from string format like "text='hello world'"
+            # Simple parsing - could be enhanced for complex arguments
+            kwargs = {}
+            if args.strip():
+                # Remove parentheses if present
+                args = args.strip()
+                if args.startswith('(') and args.endswith(')'):
+                    args = args[1:-1]
+                
+                # Split by comma and parse key=value pairs
+                for arg in args.split(','):
+                    if '=' in arg:
+                        key, value = arg.split('=', 1)
+                        key = key.strip()
+                        value = value.strip()
+                        
+                        # Remove quotes if present
+                        if (value.startswith('"') and value.endswith('"')) or \
+                           (value.startswith("'") and value.endswith("'")):
+                            value = value[1:-1]
+                        
+                        kwargs[key] = value
+            
+            result = execute_tool(tool_name, **kwargs)
+            return str(result)
+        except Exception as e:
+            return f"Error executing tool {tool_name}: {str(e)}"

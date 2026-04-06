@@ -1,33 +1,61 @@
-from src.tool.tool_definitions import execute_tool, get_available_tools
-
-# Văn bản ví dụ để test
-sample_text = """
-Tiêu đề bài báo
-
-Abstract: Bài báo này đề xuất một phương pháp mới để phân tích các metric AI. 
-Chúng tôi đánh giá accuracy, F1 score và recall trên nhiều tập dữ liệu. 
-Kết quả cho thấy cải thiện đáng kể.
-
-Introduction: Lĩnh vực AI phát triển nhanh chóng...
+"""
+Tool definitions for the ReAct Agent.
+Each tool should have: name, description, and a callable function.
 """
 
-# 1. Xem danh sách các công cụ
-tools = get_available_tools()
-print("Danh sách các tool có sẵn:")
-for t in tools:
-    print("-", t['name'], ":", t['description'])
+from src.tool.reader import clean_text, extract_abstract, extract_metadata
+from typing import Dict, Any
 
-# 2. Test clean_text (làm sạch văn bản)
-cleaned = execute_tool("clean_text", text=sample_text)
-print("\n--- Văn bản đã làm sạch ---")
-print(cleaned)
+# Tool registry - maps tool names to their implementations
+TOOL_REGISTRY = {
+    "clean_text": clean_text,
+    "extract_abstract": extract_abstract,
+    "extract_metadata": extract_metadata,
+}
 
-# 3. Test extract_abstract (trích Abstract)
-abstract = execute_tool("extract_abstract", text=sample_text)
-print("\n--- Abstract trích ra ---")
-print(abstract)
+# Tool definitions for the agent
+def get_available_tools() -> list:
+    """
+    Returns a list of available tools with their descriptions.
+    Format expected by ReActAgent.
+    """
+    return [
+        {
+            "name": "clean_text",
+            "description": "Clean text by removing strange characters, normalizing unicode, and fixing whitespace. Input: text (str). Returns: cleaned text (str).",
+            "callable": clean_text,
+        },
+        {
+            "name": "extract_abstract",
+            "description": "Extract abstract from research paper or long text. Looks for 'Abstract' section or extracts first paragraph. Input: text (str), max_sentences (int, optional). Returns: abstract (str).",
+            "callable": extract_abstract,
+        },
+        {
+            "name": "extract_metadata",
+            "description": "Extract metadata from text including title, abstract, word count. Input: text (str). Returns: dictionary with metadata.",
+            "callable": extract_metadata,
+        },
+    ]
 
-# 4. Test extract_metadata (trích metadata)
-metadata = execute_tool("extract_metadata", text=sample_text)
-print("\n--- Metadata trích ra ---")
-print(metadata)
+
+def execute_tool(tool_name: str, **kwargs) -> Any:
+    """
+    Execute a tool by name with given arguments.
+    
+    Args:
+        tool_name: Name of the tool to execute
+        **kwargs: Arguments to pass to the tool
+        
+    Returns:
+        Result from the tool execution
+    """
+    if tool_name not in TOOL_REGISTRY:
+        return f"Error: Tool '{tool_name}' not found. Available tools: {list(TOOL_REGISTRY.keys())}"
+    
+    try:
+        tool_func = TOOL_REGISTRY[tool_name]
+        return tool_func(**kwargs)
+    except TypeError as e:
+        return f"Error executing {tool_name}: Invalid arguments. {str(e)}"
+    except Exception as e:
+        return f"Error executing {tool_name}: {str(e)}"
