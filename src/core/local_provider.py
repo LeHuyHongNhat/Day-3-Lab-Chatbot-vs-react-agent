@@ -3,6 +3,7 @@ import os
 from typing import Dict, Any, Optional, Generator
 from llama_cpp import Llama
 from src.core.llm_provider import LLMProvider
+from src.utils.monitor import track_llm_error, track_llm_result
 
 class LocalProvider(LLMProvider):
     """
@@ -32,7 +33,7 @@ class LocalProvider(LLMProvider):
 
     def generate(self, prompt: str, system_prompt: Optional[str] = None) -> Dict[str, Any]:
         start_time = time.time()
-        
+
         # Phi-3 / Llama-3 style formatting if not handled by a template
         full_prompt = prompt
         if system_prompt:
@@ -40,29 +41,36 @@ class LocalProvider(LLMProvider):
         else:
             full_prompt = f"<|user|>\n{prompt}<|end|>\n<|assistant|>"
 
-        response = self.llm(
-            full_prompt,
-            max_tokens=1024,
-            stop=["<|end|>", "Observation:"],
-            echo=False
-        )
+        try:
+            response = self.llm(
+                full_prompt,
+                max_tokens=1024,
+                stop=["<|end|>", "Observation:"],
+                echo=False
+            )
 
-        end_time = time.time()
-        latency_ms = int((end_time - start_time) * 1000)
+            end_time = time.time()
+            latency_ms = int((end_time - start_time) * 1000)
 
-        content = response["choices"][0]["text"].strip()
-        usage = {
-            "prompt_tokens": response["usage"]["prompt_tokens"],
-            "completion_tokens": response["usage"]["completion_tokens"],
-            "total_tokens": response["usage"]["total_tokens"]
-        }
+            content = response["choices"][0]["text"].strip()
+            usage = {
+                "prompt_tokens": response["usage"]["prompt_tokens"],
+                "completion_tokens": response["usage"]["completion_tokens"],
+                "total_tokens": response["usage"]["total_tokens"]
+            }
 
-        return {
-            "content": content,
-            "usage": usage,
-            "latency_ms": latency_ms,
-            "provider": "local"
-        }
+            result = {
+                "content": content,
+                "usage": usage,
+                "latency_ms": latency_ms,
+                "provider": "local",
+                "model": self.model_name,
+            }
+            return track_llm_result(result)
+        except Exception as exc:
+            latency_ms = int((time.time() - start_time) * 1000)
+            track_llm_error("local", self.model_name, exc, latency_ms)
+            raise
 
     def stream(self, prompt: str, system_prompt: Optional[str] = None) -> Generator[str, None, None]:
         full_prompt = prompt
